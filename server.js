@@ -165,6 +165,11 @@ const modelsByName = MODEL_NAMES.map(
 
 const webModelsByName = MODEL_NAMES.map(
   name => genAIClients.map(ai => ai.getGenerativeModel({
+    model: name,
+    tools: [{ googleSearch: {} }]
+  }))
+);
+
 const modelCooldownUntil = new Map();
 
 function getGeminiErrorStatus(error) {
@@ -185,8 +190,6 @@ async function generateWithRetry(contents, useWebSearch = false) {
   const groups = useWebSearch ? webModelsByName : modelsByName;
   let lastError;
 
-  // Try every configured model before giving up. A 429 on one model must
-  // never prevent a different model with available quota from being used.
   for (let mi = 0; mi < groups.length; mi++) {
     const modelName = MODEL_NAMES[mi];
     const cooldownUntil = modelCooldownUntil.get(modelName) || 0;
@@ -219,11 +222,6 @@ async function generateWithRetry(contents, useWebSearch = false) {
     }
   }
 
-  throw lastError;
-}> setTimeout(r, 300));
-      }
-    }
-  }
   throw lastError;
 }
 
