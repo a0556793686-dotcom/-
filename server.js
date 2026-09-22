@@ -651,14 +651,21 @@ async function configureYemotStructure() {
     'Setting Yemot extension /1 to API...'
   );
 
-  // Remove the password requirement from the main line.
+  // Remove password protection from the main menu and API entry.
+  // Yemot documents that password= (empty) removes a branch password.
+  // Use both root path spellings because Yemot APIs commonly accept ivr2: for root.
+  await updateExtension('ivr2:', {
+    password: ''
+  });
+
   await updateExtension('ivr2:/', {
     password: ''
   });
 
   await updateExtension('ivr2:/1', {
     type: 'api',
-    api_link: publicUrl + '/yemot'
+    api_link: publicUrl + '/yemot',
+    password: ''
   });
 
   console.log(
