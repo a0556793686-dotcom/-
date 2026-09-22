@@ -365,19 +365,10 @@ async function callHandler(call) {
   });
 
   let firstTurn = true;
-  let openingPrompt = null;
-
-  if (conversationLog.some(x => x.phone === callerPhone)) {
-    openingPrompt = await buildOpeningForCaller(callerPhone);
-  }
 
   while (true) {
     const prompt = firstTurn
-      ? (
-          openingPrompt ||
-          process.env.FIRST_CALL_MESSAGE ||
-          'שלום איך אפשר לעזור לך היום אמור בבקשה על מה תרצה לדבר אחרי הצפצוף ולסיום ההקלטה הקש סולמית'
-        )
+      ? 'שלום איך אפשר לעזור לך היום אמור בבקשה על מה תרצה לדבר אחרי הצפצוף ולסיום ההקלטה הקש סולמית'
       : 'אמור שאלה נוספת ולסיום הקש סולמית או הקש כוכבית ליציאה';
 
     firstTurn = false;
