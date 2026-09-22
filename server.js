@@ -14,7 +14,7 @@ if (!apiKeys.length) {
   console.warn('Gemini is not configured yet. Set GEMINI_API_KEYS.');
 }
 
-const MODEL_NAMES = (process.env.GEMINI_MODELS || 'gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash')
+const MODEL_NAMES = (process.env.GEMINI_MODELS || 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite')
   .split(',').map(x => x.trim()).filter(Boolean);
 
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 10000);
@@ -165,10 +165,17 @@ const modelsByName = MODEL_NAMES.map(
 
 const webModelsByName = MODEL_NAMES.map(
   name => genAIClients.map(ai => ai.getGenerativeModel({
-    model: name,
-    tools: [{ googleSearch: {} }]
-  }))
-);
+const modelCooldownUntil = new Map();
+
+function getGeminiErrorStatus(error) {
+  return Number(error?.status || error?.statusCode || error?.response?.status || 0);
+}
+
+function markModelCooldown(modelName, status) {
+  if (status === 429) {
+    modelCooldownUntil.set(modelName, Date.now() + 5 * 60 * 1000);
+  }
+}
 
 async function generateWithRetry(contents, useWebSearch = false) {
   if (!modelsByName.length || !modelsByName[0]?.length) {
@@ -178,18 +185,42 @@ async function generateWithRetry(contents, useWebSearch = false) {
   const groups = useWebSearch ? webModelsByName : modelsByName;
   let lastError;
 
+  // Try every configured model before giving up. A 429 on one model must
+  // never prevent a different model with available quota from being used.
   for (let mi = 0; mi < groups.length; mi++) {
+    const modelName = MODEL_NAMES[mi];
+    const cooldownUntil = modelCooldownUntil.get(modelName) || 0;
+
+    if (cooldownUntil > Date.now()) {
+      console.log('[Gemini fallback] skipping ' + modelName + ' until ' + new Date(cooldownUntil).toISOString() + ' after 429');
+      continue;
+    }
+
     for (let ki = 0; ki < groups[mi].length; ki++) {
       try {
-        return await withTimeout(
+        console.log('[Gemini] trying ' + modelName + ' key #' + (ki + 1) + (useWebSearch ? ' with Google Search' : ''));
+        const result = await withTimeout(
           groups[mi][ki].generateContent(contents),
           REQUEST_TIMEOUT_MS,
-          `${MODEL_NAMES[mi]} key #${ki + 1}`
+          modelName + ' key #' + (ki + 1)
         );
+        console.log('[Gemini] success with ' + modelName + ' key #' + (ki + 1));
+        return result;
       } catch (e) {
         lastError = e;
-        if (![404, 503, 429, 500, 408].includes(e.status)) throw e;
-        await new Promise(r => setTimeout(r, 300));
+        const status = getGeminiErrorStatus(e);
+        console.error('[Gemini] ' + modelName + ' key #' + (ki + 1) + ' failed with status ' + (status || 'unknown') + ': ' + (e?.message || e));
+
+        if (![404, 503, 429, 500, 408].includes(status)) throw e;
+
+        markModelCooldown(modelName, status);
+        await new Promise(r => setTimeout(r, status === 429 ? 50 : 300));
+      }
+    }
+  }
+
+  throw lastError;
+}> setTimeout(r, 300));
       }
     }
   }
