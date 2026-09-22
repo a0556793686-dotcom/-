@@ -228,8 +228,8 @@ function getIsraelDateTime() {
 }
 
 async function answerNormalQuestion(audioBase64) {
-  const prompt = \`\${EXCLUSIVE_INSTRUCTION}
-זמן נוכחי בישראל: \${getIsraelDateTime()}
+  const prompt = `${EXCLUSIVE_INSTRUCTION}
+זמן נוכחי בישראל: ${getIsraelDateTime()}
 אם נשאלת שאלה על השעה או התאריך הנוכחיים, השתמש בזמן הזה.
 
 זו הקלטה של שאלה מהמתקשר. האזן להקלטה, הבן את הדיבור בעצמך וענה על השאלה.
@@ -251,7 +251,7 @@ ANSWER: התשובה המלאה למתקשר
 - אל תכניס בתוך ANSWER את המילים TRANSCRIPT או ANSWER.
 - אל תצטט מקורות ואל תוסיף הסברים על הפורמט.
 - אם ההקלטה אינה בעברית, תמלל את דברי המתקשר בשפה שבה דיבר.
-- אם קיימת במערכת דרישה לאורך תשובה, פעל לפיה.\`;
+- אם קיימת במערכת דרישה לאורך תשובה, פעל לפיה.`;
 
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
