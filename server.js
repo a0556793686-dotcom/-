@@ -250,6 +250,8 @@ const router = YemotRouter({
     logDetailedError('call handler', e)
 });
 
+app.use(router);
+
 function audioParts(audioBase64) {
   return [{
     inlineData: {
