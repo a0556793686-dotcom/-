@@ -262,8 +262,21 @@ function audioParts(audioBase64) {
   }];
 }
 
+function getIsraelDateTime() {
+  return new Intl.DateTimeFormat('he-IL', {
+    timeZone: 'Asia/Jerusalem',
+    dateStyle: 'full',
+    timeStyle: 'short',
+    hour12: false
+  }).format(new Date());
+}
+
 async function answerNormalQuestion(audioBase64) {
   const prompt = `${EXCLUSIVE_INSTRUCTION}
+
+השעה והתאריך הנוכחיים בישראל: ${getIsraelDateTime()}
+
+חשוב: אם המתקשר שואל מה השעה, מה התאריך, איזה יום היום או שאלה דומה על הזמן הנוכחי, השתמש בזמן הנוכחי שמופיע כאן ואל תגיד שאין לך גישה לשעה.
 
 זו הקלטה של שאלה מהמתקשר. האזן להקלטה, הבן את הדיבור בעצמך וענה על השאלה.
 ענה בשפה שבה המתקשר דיבר. התשובה מיועדת להקראה בטלפון.
