@@ -232,16 +232,22 @@ async function answerNormalQuestion(audioBase64) {
 זמן נוכחי בישראל: ${getIsraelDateTime()}
 אם נשאלת שאלה על השעה או התאריך הנוכחיים, השתמש בזמן הזה.
 
-מידע אקטואלי חשוב לישראל: נכון ל-22 בספטמבר 2026, הבחירות לכנסת ה-26 נקבעו ליום שלישי, 27 באוקטובר 2026. אם המתקשר שואל מתי יהיו הבחירות לכנסת, זה התאריך שיש למסור. אין להמציא תאריך אחר.
-
 זו הקלטה של שאלה מהמתקשר. האזן להקלטה, הבן את הדיבור בעצמך וענה על השאלה.
 ענה בשפה שבה המתקשר דיבר. התשובה מיועדת להקראה בטלפון.
+
+חשוב: אם השאלה דורשת מידע עדכני, משתנה או תלוי בזמן ובמקום, השתמש ב Google Search לפני שאתה עונה.
+זה כולל בין היתר חדשות, בחירות ותאריכים שלהן, מחירים, שעות פתיחה, לוחות זמנים, מזג אוויר, מידע ציבורי עדכני וכל פרט עובדתי שעלול להשתנות.
+אל תמציא מידע עדכני. אם חיפשת, התבסס על המידע שמצאת.
+אם השאלה כללית ויציבה ואינה דורשת מידע עדכני, אין צורך בחיפוש.
+אל תבקש מהמתקשר לבצע חיפוש ואל תחזיר סימון כמו SEARCH_REQUEST; ענה ישירות לאחר החיפוש במידת הצורך.
+
 אל תצטט תמלול. אם קיימת במערכת דרישה לאורך תשובה, פעל לפיה.`;
 
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
     { text: prompt }
-  ]);
+  ], true);
+
   return result.response.text();
 }
 
@@ -251,16 +257,6 @@ async function transcribeForDashboard(audioBase64) {
     { text: 'תמלל את ההקלטה בעברית לצורך תצוגה בלבד. אל תענה על השאלה. החזר רק את התמלול, ללא הסברים.' }
   ]);
   return sanitizeForYemot(result.response.text());
-}
-
-async function answerWithWebSearch(audioBase64) {
-  const result = await generateWithRetry([
-    ...audioParts(audioBase64),
-    { text: `${EXCLUSIVE_INSTRUCTION}
-המתקשר ביקש במפורש חיפוש באינטרנט. חפש מידע עדכני ורלוונטי באמצעות Google Search,
-ואז ענה בעברית על השאלה על סמך המידע שמצאת. אל תציג כתובות אינטרנט.` }
-  ], true);
-  return result.response.text();
 }
 
 async function buildOpeningForCaller(phone) {
@@ -359,9 +355,6 @@ async function callHandler(call) {
     try {
       if (active) active.status = 'שולח Audio ל-Gemini וממתין לתשובה';
 
-      // Start the dashboard transcription at the same time as the actual answer.
-      // Previously these two Gemini requests ran one after another, adding their
-      // full latency together before the caller heard anything.
       const transcriptPromise = transcribeForDashboard(audioBase64)
         .catch(e => {
           logDetailedError('dashboard transcription', e);
@@ -374,14 +367,8 @@ async function callHandler(call) {
 
       console.log('[' + activeKey + ']: Gemini answered');
 
-      if (firstText.startsWith('SEARCH_REQUEST')) {
-        replyText = await answerWithWebSearch(audioBase64);
-      } else {
-        replyText = firstText;
-      }
+      replyText = firstText;
 
-      // The transcript is only needed for the dashboard, so collect it after
-      // the answer is ready rather than making the caller wait for it.
       transcript = await transcriptPromise;
 
     } catch (e) {
@@ -393,14 +380,12 @@ async function callHandler(call) {
             ? 'מצטערים לקח יותר מדי זמן לענות נסה שוב'
             : 'מצטער הייתה תקלה בעיבוד השאלה אפשר לנסות שוב';
 
-      // Keep the dashboard entry complete even when answering fails.
       transcript = await transcribeForDashboard(audioBase64)
         .catch(() => 'לא ניתן היה לתמלל את ההקלטה');
     }
 
     replyText = sanitizeForYemot(replyText) || 'מצטער לא הצלחתי לנסח תשובה נסה שוב';
 
-    // Do not make the caller wait for the Supabase write.
     const savePromise = addConversationEntry({
       phone: callerPhone,
       callId,
