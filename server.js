@@ -228,8 +228,8 @@ function getIsraelDateTime() {
 }
 
 async function answerNormalQuestion(audioBase64) {
-  const prompt = `${EXCLUSIVE_INSTRUCTION}
-זמן נוכחי בישראל: ${getIsraelDateTime()}
+  const prompt = \`\${EXCLUSIVE_INSTRUCTION}
+זמן נוכחי בישראל: \${getIsraelDateTime()}
 אם נשאלת שאלה על השעה או התאריך הנוכחיים, השתמש בזמן הזה.
 
 זו הקלטה של שאלה מהמתקשר. האזן להקלטה, הבן את הדיבור בעצמך וענה על השאלה.
@@ -241,22 +241,37 @@ async function answerNormalQuestion(audioBase64) {
 אם השאלה כללית ויציבה ואינה דורשת מידע עדכני, אין צורך בחיפוש.
 אל תבקש מהמתקשר לבצע חיפוש ואל תחזיר סימון כמו SEARCH_REQUEST; ענה ישירות לאחר החיפוש במידת הצורך.
 
-אל תצטט תמלול. אם קיימת במערכת דרישה לאורך תשובה, פעל לפיה.`;
+כדי לחסוך בקריאות API, החזר תשובה בפורמט הבא בלבד:
+TRANSCRIPT: התמלול הקצר והמדויק של דברי המתקשר בעברית
+ANSWER: התשובה המלאה למתקשר
+
+כללים:
+- TRANSCRIPT מיועד רק ללוח הבקרה, לא למתקשר.
+- ANSWER מיועד להקראה בטלפון.
+- אל תכניס בתוך ANSWER את המילים TRANSCRIPT או ANSWER.
+- אל תצטט מקורות ואל תוסיף הסברים על הפורמט.
+- אם ההקלטה אינה בעברית, תמלל את דברי המתקשר בשפה שבה דיבר.
+- אם קיימת במערכת דרישה לאורך תשובה, פעל לפיה.\`;
 
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
     { text: prompt }
   ], true);
 
-  return result.response.text();
-}
+  const raw = result.response.text().trim();
+  const match = raw.match(/TRANSCRIPT:\s*([\s\S]*?)\s*ANSWER:\s*([\s\S]*)$/i);
 
-async function transcribeForDashboard(audioBase64) {
-  const result = await generateWithRetry([
-    ...audioParts(audioBase64),
-    { text: 'תמלל את ההקלטה בעברית לצורך תצוגה בלבד. אל תענה על השאלה. החזר רק את התמלול, ללא הסברים.' }
-  ]);
-  return sanitizeForYemot(result.response.text());
+  if (match) {
+    return {
+      transcript: sanitizeForYemot(match[1]),
+      answer: match[2].trim()
+    };
+  }
+
+  return {
+    transcript: '',
+    answer: raw
+  };
 }
 
 async function buildOpeningForCaller(phone) {
@@ -355,21 +370,14 @@ async function callHandler(call) {
     try {
       if (active) active.status = 'שולח Audio ל-Gemini וממתין לתשובה';
 
-      const transcriptPromise = transcribeForDashboard(audioBase64)
-        .catch(e => {
-          logDetailedError('dashboard transcription', e);
-          return 'לא ניתן היה לתמלל את ההקלטה';
-        });
+      console.log('[' + activeKey + ']: recording received, sending one Gemini request');
 
-      console.log('[' + activeKey + ']: recording received, sending to Gemini');
-
-      const firstText = (await answerNormalQuestion(audioBase64)).trim();
+      const result = await answerNormalQuestion(audioBase64);
 
       console.log('[' + activeKey + ']: Gemini answered');
 
-      replyText = firstText;
-
-      transcript = await transcriptPromise;
+      replyText = result.answer;
+      transcript = result.transcript || 'לא ניתן היה לתמלל את ההקלטה';
 
     } catch (e) {
       logDetailedError('Gemini processing', e);
@@ -380,8 +388,7 @@ async function callHandler(call) {
             ? 'מצטערים לקח יותר מדי זמן לענות נסה שוב'
             : 'מצטער הייתה תקלה בעיבוד השאלה אפשר לנסות שוב';
 
-      transcript = await transcribeForDashboard(audioBase64)
-        .catch(() => 'לא ניתן היה לתמלל את ההקלטה');
+      transcript = 'לא ניתן היה לתמלל את ההקלטה';
     }
 
     replyText = sanitizeForYemot(replyText) || 'מצטער לא הצלחתי לנסח תשובה נסה שוב';
