@@ -42,7 +42,6 @@ const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_KEY);
 
 async function supabaseRequest(path, options = {}) {
   if (!SUPABASE_ENABLED) return null;
-
   const response = await fetch(SUPABASE_URL + path, {
     ...options,
     headers: {
@@ -52,13 +51,9 @@ async function supabaseRequest(path, options = {}) {
       ...(options.headers || {})
     }
   });
-
   if (!response.ok) {
-    throw new Error(
-      'Supabase HTTP ' + response.status + ': ' + await response.text()
-    );
+    throw new Error('Supabase HTTP ' + response.status + ': ' + await response.text());
   }
-
   return response;
 }
 
@@ -78,15 +73,12 @@ function getCallerNumber(call) {
 
 async function loadConversationLog() {
   if (!SUPABASE_ENABLED) return;
-
   try {
     const r = await supabaseRequest(
       '/rest/v1/conversations?select=id,created_at,phone,call_id,user_text,gemini_text&order=created_at.desc&limit=' +
       MAX_CONVERSATION_LOG
     );
-
     const rows = await r.json();
-
     conversationLog.splice(
       0,
       conversationLog.length,
@@ -106,7 +98,6 @@ async function loadConversationLog() {
 
 async function persistConversationEntry(entry) {
   if (!SUPABASE_ENABLED) return;
-
   try {
     await supabaseRequest('/rest/v1/conversations', {
       method: 'POST',
@@ -123,12 +114,7 @@ async function persistConversationEntry(entry) {
   }
 }
 
-async function addConversationEntry({
-  phone,
-  callId,
-  userText,
-  geminiText
-}) {
+async function addConversationEntry({ phone, callId, userText, geminiText }) {
   const entry = {
     id: Date.now() + '-' + conversationLog.length,
     time: new Date().toISOString(),
@@ -137,22 +123,15 @@ async function addConversationEntry({
     user: userText || '',
     gemini: geminiText || ''
   };
-
   conversationLog.push(entry);
-
   if (conversationLog.length > MAX_CONVERSATION_LOG) {
-    conversationLog.splice(
-      0,
-      conversationLog.length - MAX_CONVERSATION_LOG
-    );
+    conversationLog.splice(0, conversationLog.length - MAX_CONVERSATION_LOG);
   }
-
   await persistConversationEntry(entry);
 }
 
 function sanitizeForYemot(text) {
   if (!text) return '';
-
   return String(text)
     .replace(/[."“”‘’']/g, ' ')
     .replace(/[-–—]/g, ' ')
@@ -162,7 +141,6 @@ function sanitizeForYemot(text) {
 
 function withTimeout(promise, ms, label) {
   let timeoutId;
-
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
       const e = new Error(`Timeout after ${ms}ms: ${label}`);
@@ -171,7 +149,6 @@ function withTimeout(promise, ms, label) {
       reject(e);
     }, ms);
   });
-
   return Promise.race([promise, timeoutPromise])
     .finally(() => clearTimeout(timeoutId));
 }
@@ -180,37 +157,25 @@ function logDetailedError(context, err) {
   console.error(`[${context}]`, err?.message || err);
 }
 
-const genAIClients = apiKeys.map(
-  key => new GoogleGenerativeAI(key)
-);
+const genAIClients = apiKeys.map(key => new GoogleGenerativeAI(key));
 
 const modelsByName = MODEL_NAMES.map(
-  name => genAIClients.map(
-    ai => ai.getGenerativeModel({ model: name })
-  )
+  name => genAIClients.map(ai => ai.getGenerativeModel({ model: name }))
 );
 
 const webModelsByName = MODEL_NAMES.map(
-  name => genAIClients.map(
-    ai => ai.getGenerativeModel({
-      model: name,
-      tools: [{ googleSearch: {} }]
-    })
-  )
+  name => genAIClients.map(ai => ai.getGenerativeModel({
+    model: name,
+    tools: [{ googleSearch: {} }]
+  }))
 );
 
 async function generateWithRetry(contents, useWebSearch = false) {
   if (!modelsByName.length || !modelsByName[0]?.length) {
-    throw Object.assign(
-      new Error('Gemini is not configured'),
-      { status: 400 }
-    );
+    throw Object.assign(new Error('Gemini is not configured'), { status: 400 });
   }
 
-  const groups = useWebSearch
-    ? webModelsByName
-    : modelsByName;
-
+  const groups = useWebSearch ? webModelsByName : modelsByName;
   let lastError;
 
   for (let mi = 0; mi < groups.length; mi++) {
@@ -223,16 +188,11 @@ async function generateWithRetry(contents, useWebSearch = false) {
         );
       } catch (e) {
         lastError = e;
-
-        if (![404, 503, 429, 500, 408].includes(e.status)) {
-          throw e;
-        }
-
+        if (![404, 503, 429, 500, 408].includes(e.status)) throw e;
         await new Promise(r => setTimeout(r, 300));
       }
     }
   }
-
   throw lastError;
 }
 
@@ -243,11 +203,8 @@ const yemotApi = new YemotApi(
 
 const router = YemotRouter({
   printLog: true,
-  defaults: {
-    removeInvalidChars: true
-  },
-  uncaughtErrorHandler: e =>
-    logDetailedError('call handler', e)
+  defaults: { removeInvalidChars: true },
+  uncaughtErrorHandler: e => logDetailedError('call handler', e)
 });
 
 app.use(router);
@@ -255,8 +212,7 @@ app.use(router);
 function audioParts(audioBase64) {
   return [{
     inlineData: {
-      mimeType:
-        process.env.YEMOT_AUDIO_MIME_TYPE || 'audio/wav',
+      mimeType: process.env.YEMOT_AUDIO_MIME_TYPE || 'audio/wav',
       data: audioBase64
     }
   }];
@@ -284,49 +240,34 @@ async function answerNormalQuestion(audioBase64) {
     ...audioParts(audioBase64),
     { text: prompt }
   ]);
-
   return result.response.text();
 }
 
 async function transcribeForDashboard(audioBase64) {
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
-    {
-      text:
-        'תמלל את ההקלטה בעברית לצורך תצוגה בלבד. אל תענה על השאלה. החזר רק את התמלול, ללא הסברים.'
-    }
+    { text: 'תמלל את ההקלטה בעברית לצורך תצוגה בלבד. אל תענה על השאלה. החזר רק את התמלול, ללא הסברים.' }
   ]);
-
   return sanitizeForYemot(result.response.text());
 }
 
 async function answerWithWebSearch(audioBase64) {
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
-    {
-      text: `${EXCLUSIVE_INSTRUCTION}
+    { text: `${EXCLUSIVE_INSTRUCTION}
 המתקשר ביקש במפורש חיפוש באינטרנט. חפש מידע עדכני ורלוונטי באמצעות Google Search,
-ואז ענה בעברית על השאלה על סמך המידע שמצאת. אל תציג כתובות אינטרנט.`
-    }
+ואז ענה בעברית על השאלה על סמך המידע שמצאת. אל תציג כתובות אינטרנט.` }
   ], true);
-
   return result.response.text();
 }
 
 async function buildOpeningForCaller(phone) {
-  const previous = conversationLog
-    .filter(x => x.phone === normalizePhone(phone))
-    .slice(-8);
-
+  const previous = conversationLog.filter(x => x.phone === normalizePhone(phone)).slice(-8);
   if (!previous.length) {
     return process.env.FIRST_CALL_MESSAGE ||
       'שלום איך אפשר לעזור לך היום אמור בבקשה על מה תרצה לדבר אחרי הצפצוף ולסיום ההקלטה הקש סולמית';
   }
-
-  const history = previous
-    .map(x => 'המתקשר: ' + x.user + '\nAI: ' + x.gemini)
-    .join('\n\n');
-
+  const history = previous.map(x => 'המתקשר: ' + x.user + '\nAI: ' + x.gemini).join('\n\n');
   try {
     const r = await generateWithRetry([{
       text: `${EXCLUSIVE_INSTRUCTION}
@@ -336,9 +277,7 @@ ${history}
 צור פתיח קצר בעברית שמזכיר בקצרה את הנושא האחרון, מאפשר להמשיך משם,
 ושואל על מה המתקשר רוצה לדבר עכשיו. אל תמציא פרטים. בלי נקודות ובלי מרכאות.`
     }]);
-
-    return sanitizeForYemot(r.response.text()) ||
-      'שלום שוב שמח לשמוע ממך על מה תרצה לדבר עכשיו';
+    return sanitizeForYemot(r.response.text()) || 'שלום שוב שמח לשמוע ממך על מה תרצה לדבר עכשיו';
   } catch {
     return 'שלום שוב שמח לשמוע ממך על מה תרצה לדבר עכשיו';
   }
@@ -346,15 +285,8 @@ ${history}
 
 async function callHandler(call) {
   const callerPhone = getCallerNumber(call);
-
-  const callId =
-    call?.callId ||
-    call?.values?.ApiCallId ||
-    '';
-
-  const activeKey = String(
-    callId || (Date.now() + '-' + callerPhone)
-  );
+  const callId = call?.callId || call?.values?.ApiCallId || '';
+  const activeKey = String(callId || (Date.now() + '-' + callerPhone));
 
   activeCalls.set(activeKey, {
     id: activeKey,
@@ -378,145 +310,118 @@ async function callHandler(call) {
       recordPath = await call.read(
         [{ type: 'text', data: prompt }],
         'record',
-        {
-          min_length: 1,
-          max_length: 60,
-          no_confirm_menu: true
-        }
+        { min_length: 1, max_length: 60, no_confirm_menu: true }
       );
     } catch (e) {
       logDetailedError('recording read', e);
-
       if (String(e?.message || '').toLowerCase().includes('hangup')) {
         activeCalls.delete(activeKey);
         return;
       }
-
-      return call.id_list_message([
-        {
-          type: 'text',
-          data: 'מצטער הייתה תקלה בקבלת ההקלטה נסה שוב'
-        }
-      ]);
+      return call.id_list_message([{
+        type: 'text',
+        data: 'מצטער הייתה תקלה בקבלת ההקלטה נסה שוב'
+      }]);
     }
 
     if (!recordPath || recordPath === 'None') {
-      return call.id_list_message([
-        {
-          type: 'text',
-          data: 'לא נקלט דבר להתראות'
-        }
-      ]);
+      return call.id_list_message([{ type: 'text', data: 'לא נקלט דבר להתראות' }]);
     }
 
     const active = activeCalls.get(activeKey);
-
-    if (active) {
-      active.status = 'הקלטה התקבלה — מעבד';
-    }
+    if (active) active.status = 'הקלטה התקבלה — מעבד';
 
     let audioBuffer;
-
     try {
       const response = await withTimeout(
         yemotApi.download_file('ivr2:' + recordPath),
         REQUEST_TIMEOUT_MS,
         'yemotApi.download_file'
       );
-
       audioBuffer = response.data;
     } catch (e) {
       logDetailedError('recording download', e);
-      return call.id_list_message([
-        {
-          type: 'text',
-          data: 'מצטער הייתה תקלה בקבלת ההקלטה נסה שוב'
-        }
-      ]);
+      return call.id_list_message([{
+        type: 'text',
+        data: 'מצטער הייתה תקלה בקבלת ההקלטה נסה שוב'
+      }]);
     }
 
-    const audioBase64 =
-      Buffer.isBuffer(audioBuffer)
-        ? audioBuffer.toString('base64')
-        : Buffer.from(audioBuffer).toString('base64');
+    const audioBase64 = Buffer.isBuffer(audioBuffer)
+      ? audioBuffer.toString('base64')
+      : Buffer.from(audioBuffer).toString('base64');
 
     let replyText;
     let transcript = '';
 
     try {
-      if (active) {
-        active.status =
-          'שולח Audio ל-Gemini וממתין לתשובה';
-      }
+      if (active) active.status = 'שולח Audio ל-Gemini וממתין לתשובה';
 
-      try {
-        transcript =
-          await transcribeForDashboard(audioBase64);
-      } catch {
-        transcript = 'לא ניתן היה לתמלל את ההקלטה';
-      }
+      // Start the dashboard transcription at the same time as the actual answer.
+      // Previously these two Gemini requests ran one after another, adding their
+      // full latency together before the caller heard anything.
+      const transcriptPromise = transcribeForDashboard(audioBase64)
+        .catch(e => {
+          logDetailedError('dashboard transcription', e);
+          return 'לא ניתן היה לתמלל את ההקלטה';
+        });
 
       console.log('[' + activeKey + ']: recording received, sending to Gemini');
 
-      const firstText =
-        (await answerNormalQuestion(audioBase64)).trim();
+      const firstText = (await answerNormalQuestion(audioBase64)).trim();
 
       console.log('[' + activeKey + ']: Gemini answered');
 
       if (firstText.startsWith('SEARCH_REQUEST')) {
-        replyText =
-          await answerWithWebSearch(audioBase64);
+        replyText = await answerWithWebSearch(audioBase64);
       } else {
         replyText = firstText;
       }
 
+      // The transcript is only needed for the dashboard, so collect it after
+      // the answer is ready rather than making the caller wait for it.
+      transcript = await transcriptPromise;
+
     } catch (e) {
       logDetailedError('Gemini processing', e);
-
       replyText =
         e.status === 503 || e.status === 429
           ? 'מצטערים אני עמוס כרגע נסה שוב עוד מעט'
           : e.status === 408
             ? 'מצטערים לקח יותר מדי זמן לענות נסה שוב'
             : 'מצטער הייתה תקלה בעיבוד השאלה אפשר לנסות שוב';
+
+      // Keep the dashboard entry complete even when answering fails.
+      transcript = await transcribeForDashboard(audioBase64)
+        .catch(() => 'לא ניתן היה לתמלל את ההקלטה');
     }
 
-    replyText =
-      sanitizeForYemot(replyText) ||
-      'מצטער לא הצלחתי לנסח תשובה נסה שוב';
+    replyText = sanitizeForYemot(replyText) || 'מצטער לא הצלחתי לנסח תשובה נסה שוב';
 
-    await addConversationEntry({
+    // Do not make the caller wait for the Supabase write.
+    const savePromise = addConversationEntry({
       phone: callerPhone,
       callId,
       userText: transcript,
       geminiText: replyText
-    });
+    }).catch(e => logDetailedError('conversation save', e));
 
     try {
       await call.id_list_message(
-        [{
-          type: 'text',
-          data: replyText
-        }],
-        {
-          prependToNextAction: true
-        }
+        [{ type: 'text', data: replyText }],
+        { prependToNextAction: true }
       );
 
       activeCalls.delete(activeKey);
+      await savePromise;
 
     } catch (e) {
       logDetailedError('playback', e);
-
       await call.id_list_message(
-        [{
-          type: 'text',
-          data: 'מצטער הייתה תקלה בהקראת התשובה'
-        }],
-        {
-          prependToNextAction: true
-        }
+        [{ type: 'text', data: 'מצטער הייתה תקלה בהקראת התשובה' }],
+        { prependToNextAction: true }
       );
+      await savePromise;
     }
   }
 }
@@ -528,16 +433,12 @@ app.get('/api/conversations', (req, res) =>
     conversations: conversationLog,
     activeCalls: Array.from(activeCalls.values()),
     totalMessages: conversationLog.length,
-    totalCallers: new Set(
-      conversationLog.map(x => x.phone)
-    ).size,
+    totalCallers: new Set(conversationLog.map(x => x.phone)).size,
     serverTime: new Date().toISOString()
   })
 );
 
-app.get('/health', (req, res) =>
-  res.json({ ok: true })
-);
+app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.get('/', (req, res) =>
   res.type('html').send(
@@ -549,190 +450,89 @@ async function configureYemotStructure() {
   console.log('=== Starting Yemot automatic setup ===');
 
   const apiKey = process.env.YEMOT_API_KEY?.trim();
-
   if (!apiKey) {
-    console.log(
-      'YEMOT_API_KEY not configured; skipping automatic setup'
-    );
+    console.log('YEMOT_API_KEY not configured; skipping automatic setup');
     return;
   }
 
   console.log('YEMOT_API_KEY found');
 
-  const base =
-    'https://www.call2all.co.il/ym/api';
+  const base = 'https://www.call2all.co.il/ym/api';
 
   async function updateExtension(path, params) {
-    console.log(
-      'Updating Yemot extension:',
-      path
-    );
-
-    const qs = new URLSearchParams({
-      token: apiKey,
-      path,
-      ...params
-    });
-
+    console.log('Updating Yemot extension:', path);
+    const qs = new URLSearchParams({ token: apiKey, path, ...params });
     try {
-      const r = await fetch(
-        `${base}/UpdateExtension?${qs}`
-      );
-
+      const r = await fetch(`${base}/UpdateExtension?${qs}`);
       const text = await r.text();
-
-      console.log(
-        'Yemot UpdateExtension HTTP status:',
-        r.status
-      );
-
-      console.log(
-        'Yemot UpdateExtension response:',
-        text
-      );
-
-      if (!r.ok) {
-        throw new Error(
-          `UpdateExtension HTTP ${r.status}: ${text}`
-        );
-      }
-
+      console.log('Yemot UpdateExtension HTTP status:', r.status);
+      console.log('Yemot UpdateExtension response:', text);
+      if (!r.ok) throw new Error(`UpdateExtension HTTP ${r.status}: ${text}`);
       let data;
-
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { raw: text };
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      if (data.responseStatus && data.responseStatus !== 'OK') {
+        throw new Error(`UpdateExtension failed: ${text}`);
       }
-
-      if (
-        data.responseStatus &&
-        data.responseStatus !== 'OK'
-      ) {
-        throw new Error(
-          `UpdateExtension failed: ${text}`
-        );
-      }
-
-      console.log(
-        'Yemot extension updated successfully:',
-        path
-      );
-
+      console.log('Yemot extension updated successfully:', path);
       return data;
-
     } catch (error) {
-      console.error(
-        'Yemot UpdateExtension error:',
-        error.message
-      );
-
+      console.error('Yemot UpdateExtension error:', error.message);
       throw error;
     }
   }
 
-  const publicUrl =
-    (process.env.PUBLIC_BASE_URL || '')
-      .replace(/\/$/, '');
-
+  const publicUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
   if (!publicUrl) {
-    console.log(
-      'PUBLIC_BASE_URL missing; skipping automatic IVR URL setup'
-    );
+    console.log('PUBLIC_BASE_URL missing; skipping automatic IVR URL setup');
     return;
   }
 
-  console.log(
-    'PUBLIC_BASE_URL found:',
-    publicUrl
-  );
+  console.log('PUBLIC_BASE_URL found:', publicUrl);
+  console.log('Setting Yemot extension /1 to API...');
 
-  console.log(
-    'Setting Yemot extension /1 to API...'
-  );
-
-  // Remove password protection from the main menu and API entry.
-  // Yemot documents that password= (empty) removes a branch password.
-  // Use both root path spellings because Yemot APIs commonly accept ivr2: for root.
-  await updateExtension('ivr2:', {
-    password: ''
-  });
-
-  await updateExtension('ivr2:/', {
-    password: ''
-  });
-
+  await updateExtension('ivr2:', { password: '' });
+  await updateExtension('ivr2:/', { password: '' });
   await updateExtension('ivr2:/1', {
     type: 'api',
     api_link: publicUrl + '/yemot',
     password: ''
   });
 
-  console.log(
-    'Yemot extension /1 configured successfully'
-  );
+  console.log('Yemot extension /1 configured successfully');
 
   const voiceMap = (
-    process.env.YEMOT_VOICE_OPTIONS ||
-    '1:Elik_2100,2:Jacob,3:ymMale'
+    process.env.YEMOT_VOICE_OPTIONS || '1:Elik_2100,2:Jacob,3:ymMale'
   ).split(',');
 
   for (const item of voiceMap) {
-    const [extension, voice] =
-      item.split(':');
-
+    const [extension, voice] = item.split(':');
     if (!extension || !voice) continue;
-
-    await updateExtension(
-      `ivr2:/2/${extension}`,
-      {
-        type: 'add_id_to_list',
-        add_id_to_list_location_list: '/ivr',
-        add_id_to_list_key: 'voice',
-        add_id_to_list_value: voice,
-        add_id_to_list_value_change: 'yes',
-        add_id_to_list_end_goto: '/1',
-        add_id_to_list_error_end_goto: '/2'
-      }
-    );
+    await updateExtension(`ivr2:/2/${extension}`, {
+      type: 'add_id_to_list',
+      add_id_to_list_location_list: '/ivr',
+      add_id_to_list_key: 'voice',
+      add_id_to_list_value: voice,
+      add_id_to_list_value_change: 'yes',
+      add_id_to_list_end_goto: '/1',
+      add_id_to_list_error_end_goto: '/2'
+    });
   }
 
-  console.log(
-    '=== Yemot automatic setup completed ==='
-  );
+  console.log('=== Yemot automatic setup completed ===');
 }
 
-process.on(
-  'unhandledRejection',
-  reason => {
-    if (!(reason instanceof ExitError)) {
-      logDetailedError(
-        'Unhandled Rejection',
-        reason
-      );
-    }
-  }
-);
+process.on('unhandledRejection', reason => {
+  if (!(reason instanceof ExitError)) logDetailedError('Unhandled Rejection', reason);
+});
 
-process.on(
-  'uncaughtException',
-  err => {
-    if (!(err instanceof ExitError)) {
-      logDetailedError(
-        'Uncaught Exception',
-        err
-      );
-    }
-  }
-);
+process.on('uncaughtException', err => {
+  if (!(err instanceof ExitError)) logDetailedError('Uncaught Exception', err);
+});
 
 const port = process.env.PORT || 3000;
 
 app.listen(port, async () => {
-  console.log(
-    'server running on port ' + port
-  );
-
+  console.log('server running on port ' + port);
   await loadConversationLog();
   await configureYemotStructure();
 });
