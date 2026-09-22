@@ -386,6 +386,12 @@ async function callHandler(call) {
       );
     } catch (e) {
       logDetailedError('recording read', e);
+
+      if (String(e?.message || '').toLowerCase().includes('hangup')) {
+        activeCalls.delete(activeKey);
+        return;
+      }
+
       return call.id_list_message([
         {
           type: 'text',
@@ -450,8 +456,12 @@ async function callHandler(call) {
         transcript = 'לא ניתן היה לתמלל את ההקלטה';
       }
 
+      console.log('[' + activeKey + ']: recording received, sending to Gemini');
+
       const firstText =
         (await answerNormalQuestion(audioBase64)).trim();
+
+      console.log('[' + activeKey + ']: Gemini answered');
 
       if (firstText.startsWith('SEARCH_REQUEST')) {
         replyText =
@@ -640,6 +650,11 @@ async function configureYemotStructure() {
   console.log(
     'Setting Yemot extension /1 to API...'
   );
+
+  // Remove the password requirement from the main line.
+  await updateExtension('ivr2:/', {
+    password: ''
+  });
 
   await updateExtension('ivr2:/1', {
     type: 'api',
