@@ -285,7 +285,7 @@ ANSWER: התשובה המלאה למתקשר
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
     { text: prompt }
-  ], false);
+  ], true);
 
   const raw = result.response.text().trim();
   const match = raw.match(/TRANSCRIPT:\s*([\s\S]*?)\s*ANSWER:\s*([\s\S]*)$/i);
@@ -342,7 +342,7 @@ async function callHandler(call) {
 
   while (true) {
     const prompt = firstTurn
-      ? 'שלום איך אפשר לעזור לך היום אמור בבקשה על מה תרצה לדבר אחרי הצפצוף ולסיום ההקלטה הקש סולמית'
+      ? await buildOpeningForCaller(callerPhone)
       : 'אמור שאלה נוספת ולסיום הקש סולמית או הקש כוכבית ליציאה';
 
     firstTurn = false;
@@ -464,9 +464,54 @@ app.get('/api/conversations', (req, res) =>
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.get('/', (req, res) =>
-  res.type('html').send(
-    '<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>AI Phone Line</title></head><body><h1>AI Phone Line Dashboard</h1><p>המערכת מחוברת וממתינה לשיחות</p></body></html>'
-  )
+  res.type('html').send(`<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Phone Line Dashboard</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f6f7fb;color:#202124}
+header{background:#202124;color:#fff;padding:18px 24px}
+main{padding:20px;max-width:1200px;margin:auto}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 5px #0001}
+.num{font-size:28px;font-weight:700}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
+th,td{padding:10px;border-bottom:1px solid #eee;text-align:right;vertical-align:top}
+small{color:#666}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>AI Phone Line Dashboard</h1><div id="status">טוען...</div></header>
+<main>
+<div class="grid">
+<div class="card"><small>הודעות</small><div class="num" id="messages">0</div></div>
+<div class="card"><small>מתקשרים</small><div class="num" id="callers">0</div></div>
+<div class="card"><small>שיחות פעילות</small><div class="num" id="active">0</div></div>
+</div>
+<div class="card"><h2>שיחות</h2><table><thead><tr><th>זמן</th><th>מתקשר</th><th>שאלה</th><th>תשובת Gemini</th></tr></thead><tbody id="rows"></tbody></table></div>
+</main>
+<script>
+async function refresh(){
+  try{
+    const r=await fetch('/api/conversations',{cache:'no-store'});
+    const d=await r.json();
+    document.getElementById('messages').textContent=d.totalMessages??0;
+    document.getElementById('callers').textContent=d.totalCallers??0;
+    document.getElementById('active').textContent=(d.activeCalls||[]).length;
+    document.getElementById('status').textContent='מחובר | '+new Date(d.serverTime).toLocaleString('he-IL');
+    document.getElementById('rows').innerHTML=(d.conversations||[]).slice().reverse().map(x=>
+      '<tr><td>'+escapeHtml(x.time||'')+'</td><td>'+escapeHtml(x.phone||'')+'</td><td>'+escapeHtml(x.user||'')+'</td><td>'+escapeHtml(x.gemini||'')+'</td></tr>'
+    ).join('') || '<tr><td colspan="4">אין שיחות עדיין</td></tr>';
+  }catch(e){document.getElementById('status').textContent='שגיאת חיבור ללוח הבקרה'}
+}
+function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+refresh();setInterval(refresh,3000);
+</script>
+</body>
+</html>`)
 );
 
 async function configureYemotStructure() {
