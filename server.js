@@ -14,7 +14,7 @@ if (!apiKeys.length) {
   console.warn('Gemini is not configured yet. Set GEMINI_API_KEYS.');
 }
 
-const MODEL_NAMES = (process.env.GEMINI_MODELS || 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite')
+const MODEL_NAMES = (process.env.GEMINI_MODELS || 'gemini-2.5-flash-lite,gemini-2.5-flash,gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite')
   .split(',').map(x => x.trim()).filter(Boolean);
 
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 10000);
@@ -285,7 +285,7 @@ ANSWER: התשובה המלאה למתקשר
   const result = await generateWithRetry([
     ...audioParts(audioBase64),
     { text: prompt }
-  ], true);
+  ], false);
 
   const raw = result.response.text().trim();
   const match = raw.match(/TRANSCRIPT:\s*([\s\S]*?)\s*ANSWER:\s*([\s\S]*)$/i);
