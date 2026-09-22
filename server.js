@@ -373,15 +373,26 @@ async function callHandler(call) {
 
     firstTurn = false;
 
-    const recordPath = await call.read(
-      [{ type: 'text', data: prompt }],
-      'record',
-      {
-        min_length: 1,
-        max_length: 60,
-        no_confirm_menu: true
-      }
-    );
+    let recordPath;
+    try {
+      recordPath = await call.read(
+        [{ type: 'text', data: prompt }],
+        'record',
+        {
+          min_length: 1,
+          max_length: 60,
+          no_confirm_menu: true
+        }
+      );
+    } catch (e) {
+      logDetailedError('recording read', e);
+      return call.id_list_message([
+        {
+          type: 'text',
+          data: 'מצטער הייתה תקלה בקבלת ההקלטה נסה שוב'
+        }
+      ]);
+    }
 
     if (!recordPath || recordPath === 'None') {
       return call.id_list_message([
@@ -410,7 +421,12 @@ async function callHandler(call) {
       audioBuffer = response.data;
     } catch (e) {
       logDetailedError('recording download', e);
-      continue;
+      return call.id_list_message([
+        {
+          type: 'text',
+          data: 'מצטער הייתה תקלה בקבלת ההקלטה נסה שוב'
+        }
+      ]);
     }
 
     const audioBase64 =
