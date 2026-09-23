@@ -306,8 +306,7 @@ ANSWER: התשובה המלאה למתקשר
 async function buildOpeningForCaller(phone) {
   const previous = conversationLog.filter(x => x.phone === normalizePhone(phone)).slice(-8);
   if (!previous.length) {
-    return process.env.FIRST_CALL_MESSAGE ||
-      'שלום איך אפשר לעזור לך היום אמור בבקשה על מה תרצה לדבר אחרי הצפצוף ולסיום ההקלטה הקש סולמית';
+    return 'שלום, איך אפשר לעזור לך?';
   }
   const history = previous.map(x => 'המתקשר: ' + x.user + '\nAI: ' + x.gemini).join('\n\n');
   try {
