@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping Render health endpoint
         run: |
-          curl --fail --silent --show-error --max-time 20 https://yazt17cioy.onrender.com/health
+          curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 90 https://yazt17cioy.onrender.com/health
